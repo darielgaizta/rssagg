@@ -1,0 +1,202 @@
+"""
+Pro tips:
+01. Use "fmt" instead of GO builtin!
+02. Import using _
+	>>> _ "github.com/lib/pq"
+	Will include all the code in lib/pq even though the code is not directly
+03. Whenever you get a new dependency, do:
+	>>> go mod tidy
+	>>> go mod vendor
+04. Make a function to be a method of a variable.
+	'''
+	type apiConfig struct {
+		DB *database.Queries
+	}
+
+	apiCfg := apiConfig{
+		DB: database.New(conn),
+	}
+
+	func (apiCfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
+		// body function
+	}
+	'''
+"""
+
+[1] Create Local Environment
+Open terminal and type the following command to install godotenv:
+>>> go get github.com/joho/godotenv
+    01. Create a new file: .env
+    02. In main.go, write
+        """
+        godotenv.Load()
+        <variableName> := os.Getenv(<KEYNAME_IN_ENV>)
+        """
+
+
+[2] Automatically Generate Dependency Folder (Vendor)
+BEST-PRACTICE==> Do `go mod vendor` before deployment!
+Similar concept to requirements.txt or node_modules, open terminal and type:
+>>> go mod vendor
+
+
+[3] Create Server
+To create a server, a router handler should be defined first.
+The router will be created as a new Chi Router (Kilatnote[4])!
+"""
+    // App configuration
+	router := chi.NewRouter()
+
+	server := &http.Server{
+		Handler: router,
+		Addr:    ":" + os.Getenv("PORT"),
+	}
+
+	// Start the server and keep it running forever
+	// If there is any error, it will stop and send log.
+	log.Printf("Starting server in PORT %v...", os.Getenv("PORT"))
+	err := server.ListenAndServe()
+	if err != nil {
+		log.Fatal(err)
+	}
+"""
+
+
+[4] Router
+Router that will be used is Chi, install:
+>>> go get github.com/go-chi/chi
+>>> go get github.com/go-chi/cors
+Note that a server consists of Handler and Addr, which Handler means router Handler.
+"""
+	// Router configuration
+	router := chi.NewRouter()
+
+	router.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"https://*", "http://*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"*"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
+
+	server := &http.Server{
+		Handler: router,
+		Addr:    ":" + os.Getenv("PORT"),
+	}
+"""
+Build a helper function to handle incoming request, open json.go!
+This function will write response which then will be sent to client.
+The contructed response should be handle at least success and error request.
+Lastly, create a handler function, see handler_*.go!
+Handler in GO works like views in Django, pass it to the router.
+"""
+	router := chi.NewRouter()
+
+	router.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"https://*", "http://*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"*"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
+
+	// V1 Router
+	// Create versions of your server for good practice!
+	// Path /healthz is a standard practice to test and see if server is up and running.
+	v1Router := chi.NewRouter()
+	v1Router.Get("/healthz", handlerReadiness)
+	v1Router.Get("/errz", handlerErr)
+
+	router.Mount("/v1", v1Router)
+"""
+
+
+[5] Connect to DB
+	01. Create a new database in PostgreSQL (we are going to use PostgreSQL!)
+	02. Install SQLC and Goose
+		>>> go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+		>>> go install github.com/pressly/goose/v3/cmd/goose@latest
+		If those commands did not work, run `go get` and don't forget to call go mode vendor!
+		SQLC and goose allow us to use raw SQL rather than a query language (ORM)
+	03. Create directory for DB migrations: e.g. sql/schema/001_users.sql
+		Define behavior when the query is up or down, see example in 001_users.sql!
+	04. Add DB_URL to .env file (see .env for more detail!)
+	05. Open terminal in sql/schema/ directory and type:
+		>>> goose postgres postgres://username:password@localhost:5432/database_name up
+		Check the databse and see if changes are made successfully.
+		Note that the last command "up" run the +goose Up, and so as "down" for +goose Down.
+	06. Create sqlc.yaml (see sqlc.yaml for more detail!)
+		This file contains configuration for database connection made by SQLC.
+
+
+[6] Database Handler
+Automatically generate GO function from an SQL query, done by SQLC and based on sqlc.yaml configuration.
+	01. Create a new directory sql/queries/ to store all SQL queries
+		Directory name should be registered in sqlc.yaml in queries key!
+	02. Open terminal at root directory and type:
+		>>> sqlc generate (macOS/Linux)
+		>>> docker run --rm -v "<root_directory>:/src" -w /src kjconroy/sqlc generate (Windows)
+		To run `sqlc generate` on Windows, run Docker first!
+	03. (Optional) In terminal, type:
+		>>> go get github.com/lib/pq
+		This will download github.com/google/uuid, etc.
+		NOTE You might need to import the github.com/lib/pq using underscore (_), see pro tips [2]!
+	04. Import the database connection
+		>>> Create an API config in main.go file, notice apiCfg in my main.go!
+			The variable is meant for holding connections and any configurations
+		>>> Open connection to the database using sql.Open
+		>>> See how apiCfg is configure in my main.go!
+
+
+[7] Serialize JSON
+To serialize a JSON from request, do this in the handler function:
+	01. Make a struct named "parameters", for example:
+		'''
+		type parameters struct {
+			Name string `json:"name"`
+		}
+		'''
+		The above struct will serialize JSON with key "name" for a Go variable "Name"
+	02. Create a new isntance of JSON decoder
+		'''
+		decoder := NewDecoder(r.Body)
+		'''
+	03. Serialize the request!
+		'''
+		params := parameters{}
+		err := decoder.Decode(&params)
+		if err != nil {
+			respondWithError(...)
+			return
+		}
+		'''
+	If there is no error, the serializing works!
+To serialize a Go struct to JSON for response, do:
+	01. Create new file called models.go
+	02. Create a new struct in it for each entity/model
+		'''
+		type User struct {
+			ID        uuid.UUID `json:"id"`
+			CreatedAt time.Time `json:"created_at"`
+			UpdatedAt time.Time `json:"updated_at"`
+			Name      string    `json:"name"`
+		}
+		'''
+	03. Create a function that returns the struct
+		'''
+		func serializeUser(dbUser database.User) User {
+			// Take database.User as parameter and return the locally-defined User
+			return User{
+				ID:        uuid.UUID(dbUser.ID),
+				CreatedAt: dbUser.CreatedAt,
+				UpdatedAt: dbUser.UpdatedAt,
+				Name:      dbUser.Name,
+			}
+		}
+		'''
+	04. Respond with JSON with body of the previous function
+		'''
+		respondWithJSON(w, 200, serializeUser(user))
+		'''
