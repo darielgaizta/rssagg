@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/darielgaizta/rssagg/internal/auth"
 	"github.com/darielgaizta/rssagg/internal/database"
 	"github.com/google/uuid"
 )
@@ -26,6 +27,9 @@ func (apiCfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Notice that CreateUserParams is an Any struct.
+	// The attributes defined from required parameters in sql/queries/users.sql
+	// Generated to internal/database/users.sql.go!
 	user, err := apiCfg.DB.CreateUser(r.Context(), database.CreateUserParams{
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
@@ -40,5 +44,24 @@ func (apiCfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Reques
 	// [Old] For learning purposes, an empty payload which is an empty struct is passed.
 	// Serializing JSON for response.
 	// Return a response of a serialized data
+	respondWithJSON(w, 201, serializeUser(user))
+}
+
+func (apiCfg *apiConfig) handlerGetUser(w http.ResponseWriter, r *http.Request) {
+	// Example for an authentication-required handler
+	apiKey, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		respondWithError(w, 403, fmt.Sprintf("authentication error: %v", err))
+		return
+	}
+
+	// NOTE THAT AT THIS POINT, THE API KEY SHOULD BE VALIDATED!
+	// Notice that apiKey is required because in sql/queries/users.sql, GetUser takes api_key as argument.
+	user, err := apiCfg.DB.GetUser(r.Context(), apiKey)
+	if err != nil {
+		respondWithError(w, 400, fmt.Sprintf("couldn't get user: %v", err))
+		return
+	}
+
 	respondWithJSON(w, 200, serializeUser(user))
 }

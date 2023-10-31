@@ -137,7 +137,7 @@ Automatically generate GO function from an SQL query, done by SQLC and based on 
 		Directory name should be registered in sqlc.yaml in queries key!
 	02. Open terminal at root directory and type:
 		>>> sqlc generate (macOS/Linux)
-		>>> docker run --rm -v "<root_directory>:/src" -w /src kjconroy/sqlc generate (Windows)
+		>>> docker run --rm -v "<root_full_directory>:/src" -w /src kjconroy/sqlc generate (Windows)
 		To run `sqlc generate` on Windows, run Docker first!
 	03. (Optional) In terminal, type:
 		>>> go get github.com/lib/pq
@@ -148,6 +148,18 @@ Automatically generate GO function from an SQL query, done by SQLC and based on 
 			The variable is meant for holding connections and any configurations
 		>>> Open connection to the database using sql.Open
 		>>> See how apiCfg is configure in my main.go!
+EXPLAIN Every queries in directory sql/queries:
+'''
+-- name: CreateUser :one
+INSERT INTO users (id, created_at, updated_at, name, api_key)
+VALUES ($1, $2, $3, $4,
+    encode(sha256(random()::text::bytea), 'hex')
+)
+RETURNING *;
+'''
+>>> Will generate Go function named CreateUser.
+>>> :one means that the function will return one object.
+>>> $x maps the x-th input (e.g. $1 contains value from the 1st input).
 
 
 [7] Serialize JSON
@@ -200,3 +212,14 @@ To serialize a Go struct to JSON for response, do:
 		'''
 		respondWithJSON(w, 200, serializeUser(user))
 		'''
+
+
+[8] Authentication
+	01. Make a new column named api_key for User table in database
+		The column is used to store api_key and then, the authentication headers sent will be matched
+		Open 002_users_api_key.sql and users.sql for more detail!
+		Don't forget to do `sqlc generate`!
+		Don't forget to update the user's model in models.go!
+	02. Create a new folder in "internal" directory, named "auth", and a file called "auth.go"
+		See GetAPIKey in auth.go, it will be used to validate authentication headers!
+	03. Use GetAPIKey in a handler function and pass r.Header as the argument
