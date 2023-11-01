@@ -226,3 +226,6 @@ To serialize a Go struct to JSON for response, do:
 
 
 [9] Middleware
+	01. Create a middleware file (e.g. middleware_auth.go, open middleware_auth.go to see details!)
+		Notice how the middleware function digest user (database.User) from the handler function
+	02. At the routers, wrap every handler in a middleware!
