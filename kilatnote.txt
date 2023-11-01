@@ -223,3 +223,6 @@ To serialize a Go struct to JSON for response, do:
 	02. Create a new folder in "internal" directory, named "auth", and a file called "auth.go"
 		See GetAPIKey in auth.go, it will be used to validate authentication headers!
 	03. Use GetAPIKey in a handler function and pass r.Header as the argument
+
+
+[9] Middleware
